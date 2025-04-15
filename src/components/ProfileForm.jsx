@@ -192,8 +192,6 @@ export function ProfileForm({ onComplete }) {
             {loading ? 'Saving...' : 'Complete Profile'}
           </button>
         </form>
-
-        {calorieData && <CalorieGraph calorieData={calorieData} />}
       </div>
     </div>
   );

@@ -1,76 +1,38 @@
 import React from 'react';
-import { Line } from 'react-chartjs-2';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend
-} from 'chart.js';
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend
-);
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 export function CalorieGraph({ calorieData }) {
   if (!calorieData) return null;
 
-  const data = {
-    labels: ['Protein', 'Carbs', 'Fats'],
-    datasets: [
-      {
-        label: 'Macronutrient Distribution (g)',
-        data: [
-          calorieData.macros.protein,
-          calorieData.macros.carbs,
-          calorieData.macros.fats
-        ],
-        backgroundColor: [
-          'rgba(255, 99, 132, 0.5)',
-          'rgba(54, 162, 235, 0.5)',
-          'rgba(255, 206, 86, 0.5)'
-        ],
-        borderColor: [
-          'rgba(255, 99, 132, 1)',
-          'rgba(54, 162, 235, 1)',
-          'rgba(255, 206, 86, 1)'
-        ],
-        borderWidth: 1
-      }
-    ]
-  };
-
-  const options = {
-    responsive: true,
-    plugins: {
-      legend: {
-        position: 'top',
-      },
-      title: {
-        display: true,
-        text: 'Daily Macronutrient Distribution'
-      }
-    }
-  };
+  const data = [
+    { name: 'Daily Target', calories: calorieData.dailyCalories || 0 },
+    { name: 'Consumed', calories: calorieData.total || 0 }
+  ];
 
   return (
-    <div className="mt-8 p-4 bg-white rounded-lg shadow-md">
-      <div className="mb-4">
-        <h3 className="text-xl font-bold">Daily Calorie Target: {calorieData.dailyCalories} kcal</h3>
-        <p className="text-gray-600 mt-2">{calorieData.explanation}</p>
-        <p className="text-gray-600 mt-2">{calorieData.weeklyAdjustment}</p>
-      </div>
+    <div className="bg-white p-6 rounded-lg shadow-md">
+      <h2 className="text-xl font-bold mb-4">Calorie Overview</h2>
       <div className="h-64">
-        <Line data={data} options={options} />
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="name" />
+            <YAxis label={{ value: 'Calories', angle: -90, position: 'insideLeft' }} />
+            <Tooltip formatter={(value) => [`${value} cal`, 'Calories']} />
+            <Bar dataKey="calories">
+              {data.map((entry, index) => (
+                <Cell 
+                  key={`cell-${index}`} 
+                  fill={entry.name === 'Consumed' && entry.calories > (calorieData.dailyCalories || 0) ? '#ff6b6b' : '#8884d8'} 
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="mt-4 text-sm text-gray-600">
+        <p>Target: {calorieData.dailyCalories || 0} calories</p>
+        <p>Consumed: {calorieData.total || 0} calories</p>
       </div>
     </div>
   );

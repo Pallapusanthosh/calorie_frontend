@@ -8,6 +8,7 @@ function App() {
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [profileIncompleteOnAuth, setProfileIncompleteOnAuth] = useState(false); // New state
 
   const isValidSession = (session) => {
     return (
@@ -20,45 +21,50 @@ function App() {
 
   const fetchProfile = async (userId) => {
     try {
-      const session = JSON.parse(localStorage.getItem('session')); // Parse the session JSON string
-      console.log('locltoken', session); // Log the parsed session object
-  
+      const session = JSON.parse(localStorage.getItem('session'));
       const response = await fetch(`http://localhost:5000/profile/${userId}`, {
         method: 'GET',
         headers: {
-          Authorization: `Bearer ${session.token}`, // Access the token from the parsed session
+          Authorization: `Bearer ${session.token}`,
           'Content-Type': 'application/json',
         },
       });
-  
+
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
-        setLoading(false); // Stop loading if the request fails
-        throw new Error('Failed to fetch profile');
-      }
-  
+        setProfile(null);
+        setLoading(false);
+        return;
+      };
+
       const data = await response.json();
-      console.log('Profile data:', data);
-      setProfile(data); // Update the profile state
-      setLoading(false); // Stop loading after successfully fetching the profile
+      setProfile(data);
+      setLoading(false);
+
     } catch (error) {
-      console.error('Error fetching profile:', error);
-      setLoading(false); // Stop loading even if there is an error
+      console.warn('Profile not found or error occurred:', error);
+      setProfile(null);
+      setLoading(false);
     }
   };
+
   useEffect(() => {
     const storedSession = JSON.parse(localStorage.getItem('session'));
-  
+
     const handleSession = async () => {
       if (isValidSession(storedSession)) {
         setSession(storedSession);
-        await fetchProfile(storedSession.user._id);
+        // Check if profile was incomplete during the initial auth
+        if (storedSession.profileIncomplete) {
+          setProfileIncompleteOnAuth(true);
+          setLoading(false); // No need to fetch profile yet
+        } else {
+          await fetchProfile(storedSession.user._id);
+        }
       } else {
-        setLoading(false); // Stop loading if the session is invalid
+        setLoading(false);
       }
     };
-  
+
     handleSession();
   }, []);
 
@@ -71,11 +77,31 @@ function App() {
   }
 
   if (!session) {
-    return <Auth onLogin={setSession} />;
+    return (
+      <Auth
+        onLogin={async (newSession) => {
+          setSession(newSession);
+          localStorage.setItem('session', JSON.stringify(newSession));
+          // Set the profileIncomplete flag from the auth response
+          setProfileIncompleteOnAuth(newSession.profileIncomplete);
+          if (!newSession.profileIncomplete) {
+            await fetchProfile(newSession.user._id);
+          }
+        }}
+      />
+    );
   }
 
-  if (!profile) {
-    return <ProfileForm onComplete={setProfile} />;
+  // Show ProfileForm if it was incomplete on authentication OR if fetchProfile failed
+  if (profileIncompleteOnAuth || !profile) {
+    return (
+      <ProfileForm
+        onComplete={(createdProfile) => {
+          setProfile(createdProfile);
+          setProfileIncompleteOnAuth(false); // Reset the flag
+        }}
+      />
+    );
   }
 
   return <Dashboard profile={profile} />;

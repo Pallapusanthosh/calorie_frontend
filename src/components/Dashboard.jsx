@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { Upload } from 'lucide-react';
+import { CloudCog, Upload } from 'lucide-react';
 import React from 'react';
+import MacrosGraph from './MacrosGraph';
+import { CalorieGraph } from './CalorieGraph';
+import { CalorieProgressChart } from './CalorieProgressChart';
+import html2pdf from 'html2pdf.js';
 
 export function Dashboard({ profile }) {
   const [dailyCalories, setDailyCalories] = useState(null);
@@ -13,34 +17,60 @@ export function Dashboard({ profile }) {
   const [previewUrl, setPreviewUrl] = useState(null);
   const [predictions, setPredictions] = useState(null);
   const session = JSON.parse(localStorage.getItem('session'));
+  const [uploadedMealId, setUploadedMealId] = useState(null);
+  const [deleteimage,setdeleteimage]  = useState(false);
+  const [dailyMacros, setDailyMacros] = useState({
+    date: new Date().toISOString().split('T')[0],
+    protein: 0,
+    carbs: 0,
+    fats: 0
+  });
+  
+  const [targetMacros, setTargetMacros] = useState({
+    protein: 0,
+    carbs: 0,
+    fats: 0
+  });
+  
+  // Get current date information
+  const currentDate = new Date();
+  const currentDay = currentDate.getDate();
+  const currentMonth = currentDate.getMonth() + 1; // JavaScript months are 0-indexed
+  const currentYear = currentDate.getFullYear();
 
   const [showModal, setShowModal] = useState(false);
 const [updatedProfile, setUpdatedProfile] = useState(profile);
 
   const goal = session.user.goal;
-  const testimonials = {
+  const motivationalQuotes = {
     'calorie_tracking': [
-      "Tracking my calories helped me stay consistent every day.",
-      "Seeing my numbers made me so much more mindful about what I eat."
+      "Every meal you track is a step toward your health goals.",
+      "Consistency in tracking leads to success in achieving your goals.",
+      "Your future self will thank you for tracking today."
     ],
     'weight_loss': [
-      "I've lost 5kg in two months by just sticking to my calorie goals!",
-      "This app made my weight loss journey feel achievable."
+      "Small changes today lead to big results tomorrow.",
+      "Your body can stand almost anything. It's your mind you have to convince.",
+      "The only bad workout is the one that didn't happen."
     ],
     'weight_gain': [
-      "I finally started gaining healthy weight without stressing out.",
-      "Reaching my calorie surplus has never been easier!"
+      "Building strength takes time, patience, and consistent effort.",
+      "Every gram of protein brings you closer to your muscle goals.",
+      "Your body is capable of amazing transformations with the right nutrition."
     ]
   };
   
+  const [showAllDays, setShowAllDays] = useState(false);
 
   useEffect(() => {
     fetchCalorieData();
-  }, []);
+  }, [deleteimage]);
 
   const fetchCalorieData = async () => {
     try {
-      const session = JSON.parse(localStorage.getItem('session'));
+      let session = JSON.parse(localStorage.getItem('session'));
+      setTargetMacros(session.user.sessionInfo.macros);
+     
       if (!session) {
         console.error('No authentication token found');
         return;
@@ -54,6 +84,7 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
         },
         credentials: 'include',
       });
+    
 
       if (!dailyResponse.ok) {
         let errorMessage = 'Failed to fetch daily calories';
@@ -70,6 +101,8 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
       let dailyData;
       try {
         dailyData = await dailyResponse.json();
+        setDailyMacros(dailyData.macros);
+        // console.log(dailyData.macros);
       } catch (e) {
         console.error('Failed to parse daily response as JSON:', e);
         dailyData = {
@@ -133,7 +166,51 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
     setPredictions(null);
   };
 
-
+  const handleDelete = async () => {
+    if (!uploadedMealId) {
+      alert('No uploaded meal to delete.');
+      return;
+    }
+  
+    try {
+      const session = JSON.parse(localStorage.getItem('session'));
+      if (!session) {
+        console.error('No authentication token found');
+        return;
+      }
+  
+      const response = await fetch(`http://localhost:5000/meals/meals/${uploadedMealId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${session.token}`,
+        },
+        credentials: 'include',
+      });
+  
+      if (!response.ok) {
+        let errorMessage = 'Failed to delete meal';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          errorMessage = `Server error: ${response.status}`;
+        }
+        throw new Error(errorMessage);
+      }
+  
+      alert('Meal deleted successfully');
+      setdeleteimage(true);
+      setUploadedMealId(null);
+      setPredictions([]);
+      setSelectedFile(null);
+      setPreviewUrl(null);
+      setWeight(100);
+    } catch (error) {
+      console.error('Error deleting meal:', error);
+      alert(`Error deleting meal: ${error.message}`);
+    }
+  };
+  
   const handleupdateprofile = async () => {
     try {
       const session = JSON.parse(localStorage.getItem('session'));
@@ -185,7 +262,7 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
       formData.append('mealType', mealType);
       formData.append('weight', weight); // <-- New: adding weight
       console.log(mealType);
-      const response = await fetch(`http://localhost:5000/meals`, {
+      const response = await fetch(`http://localhost:5000/meals/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.token}`
@@ -209,12 +286,14 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
       let data;
       try {
         data = await response.json();
+        console.log(data);
       } catch (e) {
         throw new Error('Invalid response from server');
       }
 
       setPredictions(data.predictions);
       await fetchCalorieData();
+      setUploadedMealId(data.meal._id);
       setSelectedFile(null);
       setPreviewUrl(null);
       setWeight(100); // <-- reset to 100g
@@ -234,6 +313,34 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
     }))
   : [];
 
+  // Function to check if a day is the current day
+  const isCurrentDay = (day) => {
+    return day === currentDay;
+  };
+
+  // Function to check if a day is in the current month
+  const isCurrentMonth = (month, year) => {
+    return month === currentMonth && year === currentYear;
+  };
+
+  // Function to get visible days based on showAllDays state
+  const getVisibleDays = (days) => {
+    if (!days || days.length === 0) return [];
+    
+    // Filter out future days
+    const filteredDays = days.filter(day => {
+      // Always filter out future days, regardless of month
+      return day.day <= currentDay;
+    });
+    
+    // If showAllDays is true, return all filtered days
+    if (showAllDays) {
+      return filteredDays;
+    }
+    
+    // Otherwise, return only the last 5 days
+    return filteredDays.slice(-5);
+  };
 
   return (
     <div className="min-h-screen bg-gray-100 p-6">
@@ -341,26 +448,40 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
   </div>
 )}
 
-
-<header className="bg-white rounded-lg shadow-sm p-4 mb-6 flex flex-wrap md:flex-nowrap items-center justify-between gap-4">
-  <div className="flex items-center gap-4">
-    <h1 className="text-2xl font-bold">Welcome, {profile.name}</h1>
-    <div className="bg-blue-100 px-3 py-1 rounded-full">
-      <span className="text-blue-800">BMI: {profile.bmi.toFixed(1)}</span>
+<header className="bg-white rounded-lg shadow-sm p-4 mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+  <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-start">
+    <div>
+      <h1 className="text-xl sm:text-2xl font-bold">Welcome, {profile.name}</h1>
     </div>
+    {profile.bmi !== undefined && (
+      <div className="bg-blue-100 px-3 py-1 rounded-full text-sm sm:text-base">
+        <span className="text-blue-800">BMI: {profile.bmi?.toFixed(1)}</span>
+      </div>
+    )}
   </div>
 
-  <div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-4 text-right">
-    <div>
+  <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-right w-full sm:w-auto">
+    <div className="text-center sm:text-right">
       <p className="text-sm text-gray-600">Daily Calories</p>
-      <p className="text-2xl font-bold">{dailyCalories?.total || 0} kcal</p>
+      <p className="text-xl sm:text-2xl font-bold">{dailyCalories?.total || 0} kcal</p>
     </div>
-    <button
-      onClick={() => setShowModal(true)}
-      className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-    >
-      Update Profile
-    </button>
+    <div className="flex flex-row sm:flex-col gap-2">
+      <button
+        onClick={() => setShowModal(true)}
+        className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm sm:text-base w-full sm:w-auto"
+      >
+        Update Profile
+      </button>
+      <button
+        onClick={() => {
+          localStorage.removeItem("session");
+          window.location.href = '/';
+        }}
+        className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm sm:text-base w-full sm:w-auto"
+      >
+        Log Out
+      </button>
+    </div>
   </div>
 </header>
 
@@ -443,6 +564,14 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
                 <Upload size={20} />
                 {loading ? 'Processing...' : 'Upload and Analyze'}
               </button>
+              <button 
+              disabled={loading ||!uploadedMealId}
+              onClick={handleDelete} className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400">
+    Delete This Upload
+  </button>
+            
+ 
+
             </div>
           </div>
          
@@ -460,16 +589,35 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
             </ResponsiveContainer>
           </div>
         </div>
+
+
+
+
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <MacrosGraph dailyMacros={dailyMacros} targetMacros={targetMacros} />
+          <CalorieProgressChart 
+            dailyCalories={dailyCalories} 
+            targetCalories={session?.user?.sessionInfo?.dailyCalories || 0} 
+          />
+        </div>
+
+
+
+
+
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-        <h2 className="text-xl font-semibold mb-4">What People Say</h2>
+        <h2 className="text-xl font-semibold mb-4">Daily Motivation</h2>
         <div className="space-y-4">
-          {(testimonials[goal] || []).map((quote, index) => (
+          {(motivationalQuotes[goal] || []).map((quote, index) => (
             <div key={index} className="bg-blue-50 p-4 rounded-lg text-gray-700 italic border-l-4 border-blue-500">
               "{quote}"
             </div>
           ))}
         </div>
         </div>
+
+ 
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h2 className="text-xl font-semibold mb-4">Monthly Progress - {monthlyData?.month} {monthlyData?.year}</h2>
           <ResponsiveContainer width="100%" height={300}>
@@ -494,7 +642,7 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
                 {(monthlyData?.days || []).map((entry, index) => (
                   <Cell 
                     key={`cell-${index}`}
-                    fill={entry.total > (profile.calorieData?.dailyCalories || 0) ? '#ff6b6b' : '#4CAF50'}
+                    fill={entry.total > (session?.user?.sessionInfo?.dailyCalories || 0) ? '#ff6b6b' : '#4CAF50'}
                   />
                 ))}
               </Bar>
@@ -517,23 +665,58 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lunch</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dinner</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Snacks</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Protein (g)</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Carbs (g)</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fats (g)</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {(monthlyData?.days || []).map((day, index) => (
-                    <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{day.day}</td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${day.total > (profile.calorieData?.dailyCalories || 0) ? 'text-red-600' : 'text-green-600'}`}>
+                  {getVisibleDays(monthlyData?.days || []).map((day, index) => (
+                    <tr 
+                      key={index} 
+                      className={`${isCurrentDay(day.day) ? 'bg-blue-100' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                    >
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${
+                        isCurrentDay(day.day) ? 'text-blue-800' : 'text-gray-900'
+                      }`}>
+                        {day.day}
+                        {isCurrentDay(day.day) && <span className="ml-1 text-xs text-blue-600">(Today)</span>}
+                      </td>
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${
+                        day.total > (session?.user?.sessionInfo?.dailyCalories || 0) 
+                          ? 'text-red-600' 
+                          : 'text-green-600'
+                      }`}>
                         {day.total} kcal
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{day.breakdown.breakfast}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{day.breakdown.lunch}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{day.breakdown.dinner}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{day.breakdown.snacks}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{Number(day.macros?.protein || 0).toFixed(3)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{Number(day.macros?.carbs || 0).toFixed(3)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{Number(day.macros?.fats || 0).toFixed(3)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              
+              {/* View More/Less Button */}
+              {monthlyData?.days && monthlyData.days.filter(day => {
+                if (isCurrentMonth(monthlyData?.month, monthlyData?.year)) {
+                  return day.day <= currentDay;
+                }
+                return true;
+              }).length > 5 && (
+                <div className="mt-4 text-center">
+                  <button
+                    onClick={() => setShowAllDays(!showAllDays)}
+                    className="px-4 py-2 bg-blue-100 text-blue-800 rounded-md hover:bg-blue-200 transition-colors"
+                  >
+                    {showAllDays ? 'Show Less' : 'View More'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
