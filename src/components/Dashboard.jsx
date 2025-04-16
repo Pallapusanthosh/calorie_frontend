@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { CloudCog, Upload } from 'lucide-react';
+import { CloudCog, Download, Upload } from 'lucide-react';
 import React from 'react';
 import MacrosGraph from './MacrosGraph';
 import { CalorieGraph } from './CalorieGraph';
 import { CalorieProgressChart } from './CalorieProgressChart';
 import html2pdf from 'html2pdf.js';
+import { motion } from "framer-motion"
+import { useRef } from 'react';
+
 
 export function Dashboard({ profile }) {
+  const [reportData, setReportData] = useState(null);
   const [dailyCalories, setDailyCalories] = useState(null);
   const [monthlyData, setMonthlyData] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -19,13 +23,14 @@ export function Dashboard({ profile }) {
   const session = JSON.parse(localStorage.getItem('session'));
   const [uploadedMealId, setUploadedMealId] = useState(null);
   const [deleteimage,setdeleteimage]  = useState(false);
+  const reportRef = useRef();
   const [dailyMacros, setDailyMacros] = useState({
     date: new Date().toISOString().split('T')[0],
     protein: 0,
     carbs: 0,
     fats: 0
   });
-  
+ const sessionInfo=session.user.sessionInfo;
   const [targetMacros, setTargetMacros] = useState({
     protein: 0,
     carbs: 0,
@@ -64,6 +69,7 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
 
   useEffect(() => {
     fetchCalorieData();
+    // console.log(monthlyData);
   }, [deleteimage]);
 
   const fetchCalorieData = async () => {
@@ -152,6 +158,82 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
       console.error('Error fetching calorie data:', error);
     }
   };
+
+
+
+  const generateHealthReport = async () => {
+    setLoading(true);
+    const session = localStorage.getItem('session') 
+      ? JSON.parse(localStorage.getItem('session')) 
+      : null;
+  
+      const profile = {
+      monthlyData: monthlyData,
+    };
+  
+    if (!session || !monthlyData) {
+      console.error("Missing session or monthlyData");
+      return;
+    }
+  
+    const token = session.token;
+    const user = session.user;
+  
+    // Construct report profile
+    const reportProfile = {
+      name: user.name,
+      age: user.age,
+      gender: user.gender,
+      weight: user.weight,
+      height: user.height,
+      goal: user.goal,
+      bmi: user.bmi,
+      macros: user.sessionInfo.macros,
+      dailyCalories: user.sessionInfo.dailyCalories,
+      monthlyData: monthlyData
+    };
+  
+    try{
+      console.log(reportProfile)
+      const response = await fetch('http://localhost:5000/calories/report', {
+        method: 'POST',
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(reportProfile),
+      });
+  
+      if (!response.ok) throw new Error('Failed to generate health report');
+      
+      const data = await response.json();
+      console.log("Health Report Generated:", data);
+      // optionally:
+      setReportData(data);
+    } catch (error) {
+      console.error('Error generating health report:', error);
+    }
+    finally{
+      setLoading(false);
+    }
+  };
+
+  
+
+  const downloadPDF = () => {
+    setLoading(true);
+    const element = reportRef.current;
+    const opt = {
+      margin:       0.5,
+      filename:     'Health_Report.pdf',
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2 },
+      jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+    };
+    html2pdf().set(opt).from(element).save();
+    setLoading(false);
+  };
+  
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -616,6 +698,9 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
           ))}
         </div>
         </div>
+     
+
+
 
  
         <div className="bg-white rounded-lg shadow-sm p-6">
@@ -719,7 +804,107 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
               )}
             </div>
           </div>
+
+
+
+
         </div>
+
+
+        <div className="p-6">
+          <h1 className="text-xl font-bold mb-4">Generate Health Report</h1>
+
+          <button
+            disabled={loading}
+            className="bg-blue-500 text-white px-4 py-2 rounded"
+            onClick={generateHealthReport}
+          >
+             {loading  ? 'Generating Report' : '📥 Generate Report'}
+          </button>
+
+    
+        </div>
+
+          {reportData && (<div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-lg mt-8">
+      <div ref={reportRef} className="space-y-6 text-gray-800">
+        <h1 className="text-3xl font-bold text-center">Health Report</h1>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-1">👤 Profile Summary</h2>
+          <p><strong>Name:</strong> {session.user.name}</p>
+          <p><strong>Age:</strong> {session.user.age}</p>
+          <p><strong>BMI:</strong> {session.user.bmi}</p>
+          <p><strong>Goal:</strong> {session.user.goal}</p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-1">🔥 Daily Calorie Target</h2>
+          <p>{reportData.dailyCaloriesTarget} kcal</p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-1">🥗 Macronutrient Targets</h2>
+          <ul className="list-disc pl-6">
+            
+            <li><strong>Protein:</strong> {reportData.macronutrientTarget.protein}g</li>
+            <li><strong>Carbs:</strong> {reportData.macronutrientTarget.carbs}g</li>
+            <li><strong>Fats:</strong> {reportData.macronutrientTarget.fats}g</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-1">🩺 Overall Assessment</h2>
+          <p>{reportData.overallAssessment
+          }</p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-1">🔍 Observations</h2>
+          <p>{reportData.observations
+          }</p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-1">✅ Recommendations</h2>
+          <div className="whitespace-pre-wrap">{reportData.
+recommendations}</div>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-1">📅 Weekly Advice</h2>
+          <p>{reportData.
+weeklyAdvice
+}</p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-1">💡 Lifestyle Tips</h2>
+          <div className="whitespace-pre-wrap">{reportData.lifestyleTips
+          }</div>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-1">💬 Motivation</h2>
+          <p>{reportData.motivationalNote
+          }</p>
+        </section>
+      </div>
+
+      <div className="mt-6 text-center">
+        <button
+          onClick={downloadPDF}
+          disabled={loading}
+          className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition"
+        >
+          {loading  ? 'Downloading' : '📥 Download as PDF'}
+        </button>
+      </div>
+    </div>)}
+        
+
+
+
+
       </div>
     </div>
   );
