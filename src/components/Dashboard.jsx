@@ -82,7 +82,7 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
         return;
       }
 
-      const dailyResponse = await fetch(`http://localhost:5000/meals/daily`, {
+      const dailyResponse = await fetch(`https://calorie-backend-4og6.onrender.com/meals/daily`, {
         method: 'GET',
         headers: { 
           'Content-Type': 'application/json',
@@ -124,7 +124,7 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
         breakdown: { breakfast: 0, lunch: 0, dinner: 0, snacks: 0, other: 0 },
       });
 
-      const monthlyResponse = await fetch(`http://localhost:5000/meals/monthly`, {
+      const monthlyResponse = await fetch(`https://calorie-backend-4og6.onrender.com/meals/monthly`, {
         method: 'GET',
         headers: { 
           'Content-Type': 'application/json',
@@ -195,7 +195,7 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
   
     try{
       console.log(reportProfile)
-      const response = await fetch('http://localhost:5000/calories/report', {
+      const response = await fetch('https://calorie-backend-4og6.onrender.com/calories/report', {
         method: 'POST',
         headers: { 
           Authorization: `Bearer ${token}`,
@@ -261,7 +261,7 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
         return;
       }
   
-      const response = await fetch(`http://localhost:5000/meals/meals/${uploadedMealId}`, {
+      const response = await fetch(`https://calorie-backend-4og6.onrender.com/meals/meals/${uploadedMealId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${session.token}`,
@@ -301,7 +301,7 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
         return;
       }
 
-      const response = await fetch(`http://localhost:5000/profile`, {
+      const response = await fetch(`https://calorie-backend-4og6.onrender.com/profile`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -344,7 +344,7 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
       formData.append('mealType', mealType);
       formData.append('weight', weight); // <-- New: adding weight
       console.log(mealType);
-      const response = await fetch(`http://localhost:5000/meals/`, {
+      const response = await fetch(`https://calorie-backend-4og6.onrender.com/meals/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.token}`
