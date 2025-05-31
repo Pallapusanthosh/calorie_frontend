@@ -10,7 +10,7 @@ export function Auth({ onLogin }) {
       setLoading(true);
       const token = credentialResponse.credential; // This is the Google OAuth token
 
-      const response = await fetch('http://localhost:5000/auth/google', {
+      const response = await fetch('https://calorie-backend-4og6.onrender.com/auth/google', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
