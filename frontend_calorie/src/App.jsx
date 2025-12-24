@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Auth } from './components/Auth';
 import { ProfileForm } from './components/ProfileForm';
 import { Dashboard } from './components/Dashboard';
+import { Api } from './utils/API';
 import React from 'react';
 
 function App() {
@@ -22,7 +23,7 @@ function App() {
   const fetchProfile = async (userId) => {
     try {
       const session = JSON.parse(localStorage.getItem('session'));
-      const response = await fetch(`http://localhost:5000/profile/${userId}`, {
+      const response = await fetch(`${Api}/profile/${userId}`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${session.token}`,

@@ -8,6 +8,12 @@ import { CalorieProgressChart } from './CalorieProgressChart';
 import html2pdf from 'html2pdf.js';
 import { motion } from "framer-motion"
 import { useRef } from 'react';
+import useDailyAdvice from './useDailyAdivce';
+import DailyAdviceCard from './dailyAdviceCard';
+
+import { Api } from '../utils/API';
+
+import ChatWidget from './chatWidget'
 
 
 export function Dashboard({ profile }) {
@@ -16,12 +22,15 @@ export function Dashboard({ profile }) {
   const [monthlyData, setMonthlyData] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [mealType, setMealType] = useState('breakfast');
-  const [weight, setWeight] = useState(100); // <-- New: default 100g
+  const [weight, setWeight] = useState(100); 
   const [loading, setLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [predictions, setPredictions] = useState(null);
   const session = JSON.parse(localStorage.getItem('session'));
   const [uploadedMealId, setUploadedMealId] = useState(null);
+  const [mealAIAdvice, setMealAIAdvice] = useState("");
+  const [mealAIloading, setMealAIloading] = useState(false);
+
   const [deleteimage,setdeleteimage]  = useState(false);
   const reportRef = useRef();
   const [dailyMacros, setDailyMacros] = useState({
@@ -45,6 +54,10 @@ export function Dashboard({ profile }) {
 
   const [showModal, setShowModal] = useState(false);
 const [updatedProfile, setUpdatedProfile] = useState(profile);
+
+
+  const { advice, loading: adviceLoading } = useDailyAdvice();
+
 
   const goal = session.user.goal;
   const motivationalQuotes = {
@@ -82,7 +95,7 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
         return;
       }
 
-      const dailyResponse = await fetch(`http://localhost:5000/meals/daily`, {
+      const dailyResponse = await fetch(`${Api}/meals/daily`, {
         method: 'GET',
         headers: { 
           'Content-Type': 'application/json',
@@ -124,7 +137,7 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
         breakdown: { breakfast: 0, lunch: 0, dinner: 0, snacks: 0, other: 0 },
       });
 
-      const monthlyResponse = await fetch(`http://localhost:5000/meals/monthly`, {
+      const monthlyResponse = await fetch(`${Api}/meals/monthly`, {
         method: 'GET',
         headers: { 
           'Content-Type': 'application/json',
@@ -158,6 +171,29 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
       console.error('Error fetching calorie data:', error);
     }
   };
+      const fetchMealRecommendation = async (description) => {
+      try {
+        setMealAIloading(true);
+        const res = await fetch(`${Api}/agent/recommendation`,{
+          headers: {  
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.token}`
+          },
+          method: 'POST',
+          body: JSON.stringify(
+            {
+              mealDescription: description
+            }
+          )
+        });
+        const data = await res.json();
+        setMealAIAdvice(data.answer);
+      } catch {
+        setMealAIAdvice("");
+      } finally {
+        setMealAIloading(false);
+      }
+    };
 
 
 
@@ -195,7 +231,7 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
   
     try{
       console.log(reportProfile)
-      const response = await fetch('http://localhost:5000/calories/report', {
+      const response = await fetch(`${Api}/calories/report`, {
         method: 'POST',
         headers: { 
           Authorization: `Bearer ${token}`,
@@ -261,7 +297,7 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
         return;
       }
   
-      const response = await fetch(`http://localhost:5000/meals/meals/${uploadedMealId}`, {
+      const response = await fetch(`${Api}/meals/meals/${uploadedMealId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${session.token}`,
@@ -301,7 +337,7 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
         return;
       }
 
-      const response = await fetch(`http://localhost:5000/profile`, {
+      const response = await fetch(`${Api}/profile`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -344,7 +380,7 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
       formData.append('mealType', mealType);
       formData.append('weight', weight); // <-- New: adding weight
       console.log(mealType);
-      const response = await fetch(`http://localhost:5000/meals/`, {
+      const response = await fetch(`${Api}/meals/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.token}`
@@ -374,6 +410,8 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
       }
 
       setPredictions(data.predictions);
+      // console.log("data",data);
+      await fetchMealRecommendation(data.predictions);
       await fetchCalorieData();
       setUploadedMealId(data.meal._id);
       setSelectedFile(null);
@@ -566,6 +604,7 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
     </div>
   </div>
 </header>
+  <DailyAdviceCard advice={advice} loading={adviceLoading} />
 
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -637,7 +676,24 @@ const [updatedProfile, setUpdatedProfile] = useState(profile);
                   </ul>
                 </div>
               )}
+              {mealAIloading && (
+  <div className="mt-4 p-3 bg-gray-50 rounded-md text-sm text-gray-500 italic">
+    AI is analyzing your meal…
+  </div>
+)}
 
+              {mealAIAdvice && !mealAIloading && (
+                <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-md">
+                  <h3 className="text-sm font-semibold text-green-700 mb-1">
+                    🤖 AI Meal Suggestion
+                  </h3>
+                  <p className="text-sm text-gray-700">
+                    {mealAIAdvice}
+                  </p>
+                </div>
+              )}
+
+               
               <button
                 onClick={handleUpload}
                 disabled={!selectedFile || loading}
@@ -906,6 +962,7 @@ weeklyAdvice
 
 
       </div>
+      <ChatWidget />
     </div>
   );
 }
